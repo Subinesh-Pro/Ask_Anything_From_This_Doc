@@ -1,4 +1,5 @@
-# Chat with PDF
+<<<<<<< HEAD
+# Ask_Anything_From_This_Doc
 
 ## Overview
 The **Chat with PDF** application is a tool that allows users to upload PDF documents and interact with them by asking questions. The app processes the content of uploaded PDFs, splits the text into chunks, and stores it in a vectorized format to enable efficient similarity-based searches. Questions are then answered based on the document content using Google's Generative AI.
@@ -16,6 +17,12 @@ The **Chat with PDF** application is a tool that allows users to upload PDF docu
 
 ## Local Installation
 To run this application locally on your system, you need to download few Python libraries:
+
+***Acquire an api key through makersuite.google.com and put it in .env file***
+
+```bash
+  GOOGLE_API_KEY="your_api_key_here"
+```
 
 **These can be installed with**:
 ```bash
