@@ -1,145 +1,104 @@
-import google.generativeai as genai
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain.vectorstores import FAISS
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.chains.question_answering import load_qa_chain
-from langchain.prompts import PromptTemplate
-from PyPDF2 import PdfReader
 import streamlit as st
-import os
-from dotenv import load_dotenv
+import google.generativeai as genai
+from PyPDF2 import PdfReader
+import logging
 
+# Configure API Key
+def configure_genai_api(api_key):
+    try:
+        genai.configure(api_key=api_key)
+        st.success("API key configured successfully!")
+    except Exception as e:
+        st.error(f"Failed to configure Gemini API: {e}")
+        logging.error(f"Error configuring API: {e}")
 
-# Initialize conversation history
-conversation_history = []
-
-# PDF text extraction function
-def get_pdf_text(pdf_docs):
-    text = ""
-    for pdf in pdf_docs:
-        pdf_reader = PdfReader(pdf)
+# Extract text from uploaded PDF
+def extract_pdf_text(pdf_file):
+    try:
+        pdf_reader = PdfReader(pdf_file)
+        text = ""
         for page in pdf_reader.pages:
             text += page.extract_text()
-    return text
+        st.success("Text extracted from PDF successfully.")
+        return text
+    except Exception as e:
+        st.error(f"Error extracting text from PDF: {e}")
+        logging.error(f"Error extracting text from PDF: {e}")
+        return ""
 
-# Split text into manageable chunks
-def get_text_chunks(text):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
-    chunks = text_splitter.split_text(text)
-    return chunks
+# Generate content with Gemini model
+def generate_content_with_gemini(prompt):
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        st.error(f"Error generating content with Gemini model: {e}")
+        logging.error(f"Error generating content with Gemini model: {e}")
+        return "Sorry, I couldn't generate a response."
 
-# Create or load vector store
-def get_vector_store(text_chunks):
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-    vector_store = FAISS.from_texts(text_chunks, embedding=embeddings)
-    vector_store.save_local("faiss_index")
-
-# Retrieve top-k most relevant chunks
-def get_relevant_context(user_question, top_k=5):
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-    new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-    docs = new_db.similarity_search(user_question, k=top_k)  # Retrieve top-k relevant chunks
-    return docs
-
-# Format context from retrieved chunks
-def format_context(docs):
-    return " ".join([doc.page_content for doc in docs])
-
-# Manage conversation history with a sliding window approach
-def manage_conversation_history(user_question, bot_response, max_turns=3):
-    global conversation_history
-    if len(conversation_history) >= max_turns * 2:
-        conversation_history = conversation_history[2:]  # Remove oldest interaction
-    conversation_history.extend([f"User: {user_question}", f"Bot: {bot_response}"])
-    return "\n".join(conversation_history)
-
-# Define a prompt template with structured instructions
-def get_conversational_chain():
-    prompt_template = """
-    You are an intelligent assistant. Read the context carefully, and answer as if you're explaining to a person in a simple and friendly manner.
-    Use plain language, avoid technical jargon, and provide a concise response. Only structure your answer in points if there are multiple distinct points or steps to explain.
-
-    <context>
-    {context}
-    </context>
-    Question: {question}
-
-    Your answer should be:
-    - Friendly and conversational
-    - In complete sentences if the answer is short or straightforward
-    - Structured as a list only if there are multiple points or steps
-    - Accurate and based only on the context provided
-    """
-    model = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.2)
-    prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
-    chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
-    return chain
-
-# Handle user input and generate response
-def user_input(user_question):
-    # Simplify the question to improve comprehension
-    simplified_question = simplify_question(user_question)
-    
-    # Retrieve relevant context from FAISS
-    docs = get_relevant_context(simplified_question, top_k=5)
-    context = format_context(docs)
-    
-    # Generate response using the conversational chain
-    chain = get_conversational_chain()
-    response = chain({"input_documents": docs, "question": simplified_question}, return_only_outputs=True)
-    
-    # Manage conversation history
-    bot_response = response["output_text"]
-    conversation_history_text = manage_conversation_history(simplified_question, bot_response)
-    
-    # Display the response
-    st.write(bot_response)
-# TSR
-def simplify_question(question):
-    # Basic preprocessing steps
-    question = question.lower().strip()  # Lowercase and trim whitespace
-    question = question.replace("please", "").replace("could you", "").replace("?", "")
-    return question
-
-# Main function to run the Streamlit app
+# Main Streamlit app
 def main():
-    st.set_page_config(page_title="TSR")
-    st.header("Chat with PDF")
-    user_question = st.text_input("Ask a Question from the PDF Files")
+    st.set_page_config(page_title="Chat with PDF", layout="wide")
 
-    if user_question:
-        user_input(user_question)
-    
+    # Page Title and Description
+    st.title("Chat with PDF using Gemini 1.5")
+    st.markdown("""Upload your PDF and ask questions about its content. The Gemini 1.5 API will provide answers based on the extracted text from the PDF.""")
+
+    # Sidebar for easy navigation
     with st.sidebar:
-        st.title("Menu:")
-
-        # ---In-case you want to use the Google API Key from the .env file---
-        # load_dotenv()
-        # genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-
+        st.header("Instructions")
+        st.markdown("""
+            1. **Upload your PDF file**: Click the 'Upload' button to upload your PDF document.
+            2. **Enter your Gemini API key**: Enter your valid Gemini API key to configure the API.
+            3. **Ask questions**: After the text is extracted, ask questions about the content of the PDF.
+        """)
+        st.markdown("---")
+        st.title("Settings:")
         api_key = st.text_input("Enter your Gemini API key:", type="password")
-        if st.button("Submit API Key"):
-            if api_key:
-                # Store the API key in Streamlit's session state for later use
-                st.session_state['gemini_api_key'] = api_key
-                genai.configure(api_key=api_key)
-                st.success("API key saved successfully!")
-            else:
-                st.error("Please enter a valid API key.")
 
-        if 'gemini_api_key' in st.session_state:
-            pdf_docs = st.file_uploader("Upload your PDF Files", accept_multiple_files=True, type="pdf")
-            if st.button("Submit & Process PDFs"):
-                if pdf_docs:
-                    with st.spinner("Processing PDFs..."):
-                        raw_text = get_pdf_text(pdf_docs)
-                        text_chunks = get_text_chunks(raw_text)
-                        get_vector_store(text_chunks)
-                        st.success("PDFs processed successfully!")
-                else:
-                    st.error("Please upload PDF files to process.")
+        # Step 2: API Key Configuration
+        if api_key:
+            configure_genai_api(api_key)
+
+    # Upload PDF file (smaller section)
+    st.subheader("Upload PDF File")
+    pdf_file = st.file_uploader("Upload your PDF file", type="pdf", key="pdf_uploader", label_visibility="collapsed")
+
+    # Make the file uploader smaller by controlling the UI elements' layout
+    st.markdown("""
+        <style>
+            .stFileUploader {
+                height: 100px;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Only show the rest of the content if the API key and PDF are present
+    if pdf_file and api_key:
+        # Step 3: Extract text from PDF
+        st.subheader("Extracting Text from PDF...")
+        pdf_text = extract_pdf_text(pdf_file)
+        
+        if pdf_text:
+            # Step 4: Ask a question about the PDF
+            st.subheader("Ask a Question")
+            question = st.text_input("What would you like to know about the PDF?")
+
+            if question:
+                # Get answer from Gemini model based on PDF context
+                prompt = f"Answer the following question based on this context:\n\n{pdf_text}\n\nQuestion: {question}"
+                answer = generate_content_with_gemini(prompt)
+
+                # Display answer with a highlighted, brighter background
+                st.markdown(f"""
+                    <div style="background-color: #87CEEB; padding: 15px; border-radius: 5px; font-size: 18px;">
+                        <strong>Answer:</strong><br>{answer}
+                    </div>
+                """, unsafe_allow_html=True)
+
+    else:
+        st.info("Please upload a PDF file and provide an API key to proceed.")
 
 if __name__ == "__main__":
     main()
-# TSR
