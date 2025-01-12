@@ -75,27 +75,22 @@ def main():
     """, unsafe_allow_html=True)
 
     # Only show the rest of the content if the API key and PDF are present
-    if pdf_file and api_key:
-        # Step 3: Extract text from PDF
-        st.subheader("Extracting Text from PDF...")
-        pdf_text = extract_pdf_text(pdf_file)
-        
-        if pdf_text:
-            # Step 4: Ask a question about the PDF
-            st.subheader("Ask a Question")
-            question = st.text_input("What would you like to know about the PDF?")
+    if pdf_text: # type: ignore
+    # Step 4: Ask a question about the PDF
+        st.subheader("Ask a Question")
+        question = st.text_input("What would you like to know about the PDF?")
 
-            if question:
-                # Get answer from Gemini model based on PDF context
-                prompt = f"Answer the following question based on this context:\n\n{pdf_text}\n\nQuestion: {question}"
-                answer = generate_content_with_gemini(prompt)
+    if question:
+        # Get answer from Gemini model based on PDF context
+        prompt = f"Answer the following question based on this context:\n\n{pdf_text}\n\nQuestion: {question}"
+        answer = generate_content_with_gemini(prompt)
 
-                # Display answer with a highlighted, brighter background
-                st.markdown(f"""
-                    <div style="background-color: #87CEEB; padding: 15px; border-radius: 5px; font-size: 18px;">
-                        <strong>Answer:</strong><br>{answer}
-                    </div>
-                """, unsafe_allow_html=True)
+        # Display answer with a white background and black text
+        st.markdown(f"""
+            <div style="background-color: #FFFFFF; color: #000000; padding: 15px; border-radius: 5px; font-size: 18px;">
+                <strong>Answer:</strong><br>{answer}
+            </div>
+        """, unsafe_allow_html=True)
 
     else:
         st.info("Please upload a PDF file and provide an API key to proceed.")
